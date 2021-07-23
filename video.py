@@ -9,6 +9,7 @@ class Video:
         self.player.queue(MediaLoad)
         self.player.play()
         self.player.loop = True
+        self.player.volume = 0
 
     def mute(self):
         self.player.volume = 0

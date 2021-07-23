@@ -1,24 +1,43 @@
 import pyglet
 from video import Video
+from screeninfo import get_monitors
 
+monitor_width = 640
+monitor_height = 480
 
-    
+m = get_monitors()
+m = m[0]
+monitor_width = int(m.width)
+monitor_height = int(m.height)
 
+print(monitor_height)
+print(monitor_width)
 
 title = "TV Simulator"
-window = pyglet.window.Window()
+win = pyglet.window
+window = win.Window(width=monitor_width, height=monitor_height)
+
 player = [
     {'active':True,'video':Video('videos/Channel5.mp4')},
     {'active':False,'video':Video('videos/video.mp4')}
 ]
 
+
+@window.event
+def on_activate():
+    print("hello form activate")
+    for vid in player:
+        if(not vid['active']):
+            vid['video'].mute()
+
+
 @window.event
 def on_draw():
     window.clear()
     p = [x for x in player if x['active']][0]['video'].player
-
+    p.volume = 1
     if p.source and p.source.video_format:
-        p.texture.blit(0, 0)
+        p.texture.blit(0,0, width=monitor_width, height=monitor_height)
 
 
 # key press event    
