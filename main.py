@@ -1,6 +1,9 @@
 import pyglet
 from video import Video
 from screeninfo import get_monitors
+from os import listdir
+from os.path import isfile, join
+
 
 monitor_width = 640
 monitor_height = 480
@@ -9,18 +12,11 @@ m = get_monitors()
 m = m[0]
 monitor_width = int(m.width)
 monitor_height = int(m.height)
-
-print(monitor_height)
-print(monitor_width)
-
 title = "TV Simulator"
 win = pyglet.window
 window = win.Window(width=monitor_width, height=monitor_height)
+player = []
 
-player = [
-    {'active':True,'video':Video('videos/Channel5.mp4')},
-    {'active':False,'video':Video('videos/video.mp4')}
-]
 
 
 @window.event
@@ -79,5 +75,26 @@ def activate_vid(i):
             item['active']=False
             item['video'].mute()
 
-pyglet.app.run()
+def get_videos(path):
+    onlyfiles = [path+'/'+f for f in listdir(path) if isfile(join(path, f))]
+    global player
+    active = True
+    for f in onlyfiles:
+        vid = {'active':active, 'video':Video(f)}
+        active = False
+        player.append(vid)
+
+
+def main():
+
+    print(monitor_height)
+    print(monitor_width)
+
+    
+    get_videos('videos')
+
+    pyglet.app.run()
+
+if __name__ == '__main__':
+    main()
 
