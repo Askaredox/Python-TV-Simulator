@@ -18,7 +18,6 @@ window = win.Window(width=monitor_width, height=monitor_height)
 player = []
 
 
-
 @window.event
 def on_activate():
     print("hello form activate")
@@ -33,10 +32,10 @@ def on_draw():
     p = [x for x in player if x['active']][0]['video'].player
     p.volume = 1
     if p.source and p.source.video_format:
-        p.texture.blit(0,0, width=monitor_width, height=monitor_height)
+        p.texture.blit(0, 0, width=monitor_width, height=monitor_height)
 
 
-# key press event    
+# key press event
 @window.event
 def on_key_press(symbol, modifier):
     if symbol == pyglet.window.key.P:
@@ -52,7 +51,7 @@ def on_key_press(symbol, modifier):
     if symbol == pyglet.window.key.Q:
         print("Key : Q is pressed")
         p = [x for x in player if x['active']][0]
-        i = player.index(p) - 1 
+        i = player.index(p) - 1
         video = i % len(player)
         activate_vid(video)
         print("Video is paused")
@@ -60,27 +59,29 @@ def on_key_press(symbol, modifier):
     if symbol == pyglet.window.key.W:
         print("Key : W is pressed")
         p = [x for x in player if x['active']][0]
-        i = player.index(p) + 1 
+        i = player.index(p) + 1
         video = i % len(player)
         print(video)
         activate_vid(video)
         print("Video is paused")
 
+
 def activate_vid(i):
     for index, item in enumerate(player):
         if index == i:
-            item['active']=True
+            item['active'] = True
             item['video'].unmute()
         else:
-            item['active']=False
+            item['active'] = False
             item['video'].mute()
+
 
 def get_videos(path):
     onlyfiles = [path+'/'+f for f in listdir(path) if isfile(join(path, f))]
     global player
     active = True
     for f in onlyfiles:
-        vid = {'active':active, 'video':Video(f)}
+        vid = {'active': active, 'video': Video(f)}
         active = False
         player.append(vid)
 
@@ -90,11 +91,10 @@ def main():
     print(monitor_height)
     print(monitor_width)
 
-    
     get_videos('videos')
 
     pyglet.app.run()
 
+
 if __name__ == '__main__':
     main()
-
