@@ -1,70 +1,32 @@
-import pyglet
-from video import Video
-from screeninfo import get_monitors
+import pygame
 from os import listdir
 from os.path import isfile, join
-
-
-monitor_width = 640
-monitor_height = 480
+from video import Video
+from screeninfo import get_monitors
 
 m = get_monitors()
 m = m[0]
 monitor_width = int(m.width)
 monitor_height = int(m.height)
-title = "TV Simulator"
-win = pyglet.window
-window = win.Window(width=monitor_width, height=monitor_height)
+pygame.init()
+window = pygame.display.set_mode([monitor_width, monitor_height])
+
+clock = pygame.time.Clock()
+# start video
+
 player = []
 
-
-@window.event
-def on_activate():
-    print("hello form activate")
-    for vid in player:
-        if(not vid['active']):
-            vid['video'].mute()
-
-
-@window.event
-def on_draw():
-    window.clear()
-    p = [x for x in player if x['active']][0]['video'].player
-    p.volume = 1
-    if p.source and p.source.video_format:
-        p.texture.blit(0, 0, width=monitor_width, height=monitor_height)
-
-
-# key press event
-@window.event
-def on_key_press(symbol, modifier):
-    if symbol == pyglet.window.key.P:
-        print("Key : P is pressed")
-        player.pause()
-        print("Video is paused")
-
-    if symbol == pyglet.window.key.R:
-        print("Key : R is pressed")
-        player.play()
-        print("Video is resumed")
-
-    if symbol == pyglet.window.key.Q:
-        print("Key : Q is pressed")
-        p = [x for x in player if x['active']][0]
-        i = player.index(p) - 1
-        video = i % len(player)
-        activate_vid(video)
-        print("Video is paused")
-
-    if symbol == pyglet.window.key.W:
-        print("Key : W is pressed")
-        p = [x for x in player if x['active']][0]
-        i = player.index(p) + 1
-        video = i % len(player)
-        print(video)
-        activate_vid(video)
-        print("Video is paused")
-
+def get_videos(path):
+    onlyfiles = [path+'/'+f for f in listdir(path) if isfile(join(path, f))]
+    global player
+    active = True
+    for f in onlyfiles:
+        video = Video(f)
+        video.set_size((monitor_width, monitor_height))
+        if(not active): video.mute()
+        vid = {'active': active, 'video': video, 'fps': video.play(loop=True)}
+        active = False
+        player.append(vid)
 
 def activate_vid(i):
     for index, item in enumerate(player):
@@ -74,26 +36,61 @@ def activate_vid(i):
         else:
             item['active'] = False
             item['video'].mute()
-
-
-def get_videos(path):
-    onlyfiles = [path+'/'+f for f in listdir(path) if isfile(join(path, f))]
-    global player
-    active = True
-    for f in onlyfiles:
-        vid = {'active': active, 'video': Video(f)}
-        active = False
-        player.append(vid)
-
-
+    
 def main():
 
     print(monitor_height)
     print(monitor_width)
 
     get_videos('videos')
+    # main loop
+    try:
+        while True:
+            video = None
+            for v in player:
+                show=False
+                v['video'].mute()
+                if(v['active']):
+                    show = True
+                    v['video'].unmute()
+                    video = v
+                v['video'].get_frame(window, False)
 
-    pyglet.app.run()
+            # set window title to current duration of video as hour:minute:second
+            t = video['video'].current_time.format("%h:%m:%s")
+            pygame.display.set_caption(t)
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    quit()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_0:
+                        print('0 pressed')
+                    if event.key == pygame.K_1:
+                        activate_vid(0)
+                    if event.key == pygame.K_2:
+                        activate_vid(1)
+                    if event.key == pygame.K_3:
+                        activate_vid(2)
+                    if event.key == pygame.K_4:
+                        activate_vid(3)
+                    if event.key == pygame.K_5:
+                        activate_vid(4)
+                    if event.key == pygame.K_6:
+                        activate_vid(5)
+                    if event.key == pygame.K_7:
+                        activate_vid(6)
+                    if event.key == pygame.K_8:
+                        activate_vid(7)
+                    if event.key == pygame.K_9:
+                        activate_vid(8)
+
+            pygame.display.update()
+            clock.tick(video['fps'])
+
+    except (KeyboardInterrupt, SystemExit):
+        pygame.quit()
+        quit()
 
 
 if __name__ == '__main__':

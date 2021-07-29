@@ -1,9 +1,18 @@
-import cv2
-import numpy as np 
+#                  Pygame Video Player                #
+#                LGPL 3.0 - Kadir Aksoy               #
+#       https://github.com/kadir014/pygamevideo       #
+
+
+import time
 import os
-from time import sleep
-from ffpyplayer.player import MediaPlayer
 import pygame
+import numpy
+import cv2
+from ffpyplayer.player import MediaPlayer
+
+
+__version__ = "1.0.0"
+
 
 
 class Time:
@@ -57,13 +66,14 @@ class Time:
         return cls(hour=h, minute=m, second=s, millisecond=sr)
 
 
+
 class Video:
-    def __init__(self, filepath) -> None:
+    def __init__(self, filepath):
         self.is_ready = False
         self.load(filepath)
 
     def __repr__(self):
-        return f"<Video(time#{self.current_time}, source#{self.video_path})>"
+        return f"<pygamevideo.Video(frame#{self.current_frame})>"
 
     def load(self, filepath):
         filepath = str(filepath)
@@ -73,74 +83,104 @@ class Video:
         self.filepath = filepath
 
         self.is_playing = False
+        self.is_ended   = True
         self.is_paused  = False
         self.is_looped  = False
+
+        self.draw_frame  = 0
+        self.start_time  = 0
+        self.ostart_time = 0
 
         self.volume   = 1
         self.is_muted = False
 
-        self.video = cv2.VideoCapture(filepath)
-        self.player = MediaPlayer(filepath)
+        self.vidcap  = cv2.VideoCapture(self.filepath)
+        self.ff = MediaPlayer(self.filepath)
 
-        self.fps = self.video.get(cv2.CAP_PROP_FPS)
-        self.sleep_ms = int(np.round((1/self.fps)))
+        self.fps = self.vidcap.get(cv2.CAP_PROP_FPS)
 
-        self.total_frames = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.total_frames = int(self.vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        self.frame_width  = int(self.video.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.frame_height = int(self.video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.frame_width  = int(self.vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.frame_height = int(self.vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        self.aspect_ratio      = self.frame_width / self.frame_height
+        self.aspect_ratio2     = self.frame_height / self.frame_width
+        self.keep_aspect_ratio = False
+
         self.frame_surf   = pygame.Surface((self.frame_width, self.frame_height))
         self._aspect_surf = pygame.Surface((self.frame_width, self.frame_height))
 
         self.is_ready = True
 
     def release(self):
-        self.video.release()
-        self.player.close_player()
+        self.vidcap.release()
+        self.ff.close_player()
         self.is_ready = False
 
+    # Control methods
+
     def play(self, loop=False):
-        if(not self.is_playing):
-            if(not self.is_ready): self.load(self.filepath)
+        if not self.is_playing:
+            if not self.is_ready: self.load(self.filepath)
+
             self.is_playing = True
             self.is_looped = loop
-            return self.fps
+
+            self.start_time = time.time()
+            self.ostart_time = time.time()
 
     def restart(self):
-        if(self.is_playing):
+        if self.is_playing:
             self.release()
-            sleep(0.1)
-            self.video = cv2.VideoCapture(self.filepath)
-            self.player = MediaPlayer(self.filepath)
+            self.vidcap = cv2.VideoCapture(self.filepath)
+            self.ff = MediaPlayer(self.filepath)
             self.is_ready = True
-            self.is_playing = True
-            
+
+            self.draw_frame = 0
+            self.is_paused = False
+
+            self.start_time = time.time()
+            self.ostart_time = time.time()
 
     def stop(self):
-        if(self.is_playing):
+        if self.is_playing:
             self.is_playing = False
+            self.is_paused = False
+            self.is_ended = True
             self.is_looped = False
+            self.draw_frame = 0
+
+            self.frame_surf = pygame.Surface((self.frame_width, self.frame_height))
+
             self.release()
 
     def pause(self):
-        self.is_playing = False
-        self.player.set_pause(True)
+        self.is_paused = True
+        self.ff.set_pause(True)
 
     def resume(self):
-        self.is_playing = True
-        self.player.set_pause(False)
+        self.is_paused = False
+        self.ff.set_pause(False)
+
+    # Audio methods
 
     def mute(self):
         self.is_muted = True
-        self.player.set_mute(True)
+        self.ff.set_mute(True)
 
     def unmute(self):
         self.is_muted = False
-        self.player.set_mute(False)
+        self.ff.set_mute(False)
+
+    def has_audio(self):
+        pass
 
     def set_volume(self, volume):
         self.volume = volume
-        self.player.set_volume(volume)
+        self.ff.set_volume(volume)
+
+    # Duration methods & properties
 
     @property
     def duration(self):
@@ -148,11 +188,19 @@ class Video:
 
     @property
     def current_time(self):
-        return Time.from_millisecond(self.video.get(cv2.CAP_PROP_POS_MSEC))
+        return Time.from_millisecond(self.vidcap.get(cv2.CAP_PROP_POS_MSEC))
 
     @property
     def remaining_time(self):
         return self.duration - self.current_time
+
+    @property
+    def current_frame(self):
+        return self.vidcap.get(cv2.CAP_PROP_POS_FRAMES)
+
+    @property
+    def remaining_frames(self):
+        return self.frame_count - self.current_frame
 
     def seek_time(self, t):
         if isinstance(t, Time):
@@ -169,11 +217,18 @@ class Video:
             self.seek_time(_t.to_millisecond())
 
         elif isinstance(t, (int, float)):
-            self.video.set(cv2.CAP_PROP_POS_MSEC, t)
-            self.player.seek(t/1000, relative=False)
+            self.start_time = self.ostart_time + t/1000
+            self.draw_frame = int((time.time() - self.start_time) * self.fps)
+            self.vidcap.set(cv2.CAP_PROP_POS_MSEC, t)
+            self.ff.seek(t/1000, relative=False)
 
         else:
             raise ValueError("Time can only be represented in Time, str, int or float")
+
+    def seek_frame(self, frame):
+        self.seek_time((frame / self.fps) * 1000)
+
+    # Dimension methods
 
     def get_size(self):
         return (self.frame_width, self.frame_height)
@@ -185,49 +240,75 @@ class Video:
         return self.frame_height
 
     def set_size(self, size):
+        self.frame_width, self.frame_height = size
+        self._aspect_surf = pygame.transform.scale(self._aspect_surf, (self.frame_width, self.frame_height))
+
         if not (self.frame_width > 0 and self.frame_height > 0):
             raise ValueError(f"Size must be positive")
 
-        self.frame_width, self.frame_height, = size
-        self._aspect_surf = pygame.transform.scale(self._aspect_surf, (self.frame_width, self.frame_height))
-
     def set_width(self, width):
-        if self.frame_width <= 0:
-            raise ValueError(f"Width must be positive")
-
         self.frame_width = width
         self._aspect_surf = pygame.transform.scale(self._aspect_surf, (self.frame_width, self.frame_height))
 
-    def set_height(self, height):
-        if self.frame_height <= 0:
-            raise ValueError(f"Height must be positive")
+        if self.frame_width <= 0:
+            raise ValueError(f"Width must be positive")
 
+    def set_height(self, height):
         self.frame_height = height
         self._aspect_surf = pygame.transform.scale(self._aspect_surf, (self.frame_width, self.frame_height))
 
-    def _scaled_frame(self):
-        return pygame.transform.scale(self.frame_surf, (self.frame_width, self.frame_height))
+        if self.frame_height <= 0:
+            raise ValueError(f"Height must be positive")
 
-    def get_frame(self, surface, show=True):
+    # Process & draw video
+
+    def _scaled_frame(self):
+        if self.keep_aspect_ratio:
+            if self.frame_width < self.frame_height:
+                self._aspect_surf.fill((0, 0, 0))
+                frame_surf = pygame.transform.scale(self.frame_surf, (self.frame_width, int(self.frame_width/self.aspect_ratio)))
+                self._aspect_surf.blit(frame_surf, (0, self.frame_height/2-frame_surf.get_height()/2))
+                return self._aspect_surf
+
+            else:
+                self._aspect_surf.fill((0, 0, 0))
+                frame_surf = pygame.transform.scale(self.frame_surf, (int(self.frame_height/self.aspect_ratio2), self.frame_height))
+                self._aspect_surf.blit(frame_surf, (self.frame_width/2-frame_surf.get_width()/2, 0))
+                return self._aspect_surf
+        else:
+            return pygame.transform.scale(self.frame_surf, (self.frame_width, self.frame_height))
+
+    def get_frame(self):
         if not self.is_playing:
             return self._scaled_frame()
-            
-        if(self.is_playing):
-            success, frame=self.video.read()
-            audio_frame, val = self.player.get_frame()
-            sleep(self.sleep_ms)
-            if(not success):
-                if self.is_looped:
-                    self.restart()
-                    return
-                else:
-                    self.stop()
-                    return
-            else:
-                if(show):
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    frame = frame.swapaxes(0, 1)
-                    size = self.get_size()
-                    frame = cv2.resize(frame, size[::-1], interpolation=cv2.INTER_AREA)
-                    pygame.surfarray.blit_array(surface, frame)
-                    pygame.display.update()
+
+        elapsed_frames = int((time.time() - self.start_time) * self.fps)
+
+        if self.draw_frame >= elapsed_frames:
+            return self._scaled_frame()
+
+        else:
+            target_frames = elapsed_frames - self.draw_frame
+            self.draw_frame += target_frames
+
+            if not self.is_paused:
+                for _ in range(target_frames):
+                    success, frame = self.vidcap.read()
+                    audio_frame, val = self.ff.get_frame()
+
+                    if not success:
+                        if self.is_looped:
+                            self.restart()
+                            return
+                        else:
+                            self.stop()
+                            return
+
+                self.frame_surf = pygame.surfarray.make_surface(frame)
+
+            return self._scaled_frame()
+
+    def draw_to(self, surface, pos):
+        frame = self.get_frame()
+
+        surface.blit(frame, pos)

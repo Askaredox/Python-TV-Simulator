@@ -1,2 +1,4 @@
-pyglet
+pygame
+ffpyplayer
+opencv-python
 screeninfo
